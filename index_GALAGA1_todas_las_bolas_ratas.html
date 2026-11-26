@@ -1,0 +1,3410 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Practica 3.5 - Three.js Survival Arena</title>
+    <link rel="icon" type="image/svg+xml"
+href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%2302457A'/%3E%3Ctext x='50' y='68' font-size='58' text-anchor='middle'%3E🐀%3C/text%3E%3C/svg%3E">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #151515;
+            color: white;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #topInfo {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.65);
+            border-radius: 8px;
+            z-index: 5;
+            line-height: 1.7;
+            font-size: 13px;
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 16px 25px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 8px;
+            z-index: 10;
+            text-align: center;
+        }
+
+        #status {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            max-width: 300px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.65);
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 5;
+        }
+
+        /* Barra de vida */
+
+        #healthPanel {
+            position: fixed;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(450px, 85vw);
+            z-index: 5;
+            text-align: center;
+        }
+
+        #healthLabel {
+            margin-bottom: 7px;
+            font-size: 15px;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px black;
+        }
+
+        #healthBar {
+            width: 100%;
+            height: 22px;
+            border: 2px solid white;
+            border-radius: 5px;
+            overflow: hidden;
+            background: rgba(30, 30, 30, 0.85);
+        }
+
+        #healthFill {
+            width: 90.9%;
+            height: 100%;
+            background: #e32636;
+            transition: width 0.15s linear;
+        }
+
+        #gameOver {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 20;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+        }
+
+        #gameOver h1 {
+            color: #ff4141;
+            font-size: 48px;
+        }
+
+        #restartButton {
+            padding: 12px 25px;
+            background: #b52626;
+            border: none;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        #restartButton:hover {
+            background: #e33d3d;
+        }
+
+        @media (max-width: 600px) {
+            #topInfo {
+                font-size: 11px;
+                padding: 8px;
+            }
+
+            #status {
+                display: none;
+            }
+        }
+        /* PIE DE PÁGINA DE LA PRÁCTICA */
+#footerInfo {
+    position: fixed;
+    bottom: 12px;
+    right: 15px;
+    width: 310px;
+    padding: 12px 15px;
+    background: rgba(2, 35, 65, 0.88);
+    border: 1px solid #018ABE;
+    border-radius: 9px;
+    color: white;
+    font-family: Arial, sans-serif;
+    z-index: 5;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+#footerInfo h1 {
+    margin: 0 0 7px;
+    color: #73C088;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#footerInfo strong {
+    color: #73C088;
+}
+
+@media (max-width: 600px) {
+    #footerInfo {
+        display: none;
+    }
+}
+    </style>
+
+    <!-- Bibliotecas y complementos -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+            "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+    }
+    </script>
+</head>
+
+<body>
+
+    <div id="topInfo">
+        <strong>SUPERVIVAL ARENA</strong><br>
+        WASD: movimiento y giro<br>
+        S: giro de 180°<br>
+        Click izquierdo: ataque 1<br>
+        Click derecho: ataque 2
+        <hr>
+        Tiempo: <span id="gameTime">00:00</span><br>
+        Enemigos: <span id="enemyCount">0</span>
+    </div>
+
+    <div id="status">
+        Inicializando escenario...
+    </div>
+
+    <div id="loading">
+        Cargando escenario y personaje...
+    </div>
+
+    <div id="healthPanel">
+        <div id="healthLabel">VIDA: 100 / 110%</div>
+        <div id="healthBar">
+            <div id="healthFill"></div>
+        </div>
+    </div>
+
+    <div id="gameOver">
+        <h1>PERSONAJE DERROTADO</h1>
+        <p>La partida ha terminado.</p>
+        <button id="restartButton">Reiniciar partida</button>
+    </div>
+<!-- PIE DE PÁGINA -->
+<footer id="footerInfo">
+
+    <h1>SURVIVAL ARENA 3D</h1>
+
+    <strong>Materia:</strong> Graficación<br>
+
+    <strong>Práctica:</strong> 3.5 Control de escenarios 3D integrales<br>
+
+    <strong>Integrantes:</strong><br>
+    Nombre del integrante 1<br>
+    Nombre del integrante 2<br>
+    Nombre del integrante 3<br>
+
+    <strong>Números de control:</strong><br>
+    Número de control 1<br>
+    Número de control 2<br>
+    Número de control 3<br>
+
+    <hr>
+
+    <strong>Tablero de instrucciones</strong><br>
+    W: Avanzar<br>
+    A / D: Girar<br>
+    S: Giro de 180°<br>
+    Q / E: Giro de 90°<br>
+    Clic izquierdo: Ataque 1<br>
+    Clic derecho: Ataque 2
+
+</footer>
+    <script type="module">
+
+    // =========================================================
+    // 1. IMPORTACIÓN DE BIBLIOTECAS
+    // =========================================================
+
+    import * as THREE from 'three';
+
+    import { FBXLoader }
+        from 'three/addons/loaders/FBXLoader.js';
+
+    import { GLTFLoader }
+        from 'three/addons/loaders/GLTFLoader.js';
+
+    import { RGBELoader }
+        from 'three/addons/loaders/RGBELoader.js';
+
+    import * as CANNON from 'cannon-es';
+
+
+    // =========================================================
+    // 2. CONFIGURACIÓN GENERAL
+    // =========================================================
+
+    const CONFIG = {
+
+        MAP_SIZE: 1000,
+
+        PLAYER_SPEED: 11,
+
+        TURN_SPEED: 2.8,
+
+        BACK_TURN_SPEED: 5.0,
+
+        MAX_HEALTH: 110,
+
+        INITIAL_HEALTH: 100,
+
+        DAMAGE_PERCENT: 20,
+
+        DAMAGE_INTERVAL: 0.5,
+
+        DAMAGE_RADIUS: 2.8,
+
+        DAMAGE_HALF_ANGLE: 65,
+
+        HEAL_PERCENT: 10,
+
+        HEAL_INTERVAL: 1,
+
+        HEAL_TOTAL_TIME: 3,
+
+        MAX_PICKUPS: 3,
+
+        PICKUP_RADIUS: 2.5,
+
+        PICKUP_RESPAWN_INTERVAL: 25,
+
+        ATTACK_RANGE: 13,
+
+        ATTACK_WINDOW: 0.55,
+
+        ATTACK_ANIMATION_SPEED: 1.3,
+
+        REPULSION_IMPULSE: 24,
+
+        REPULSION_DURATION: 1.15,
+
+        INITIAL_ENEMIES: 5,
+
+        MAX_ENEMIES: 25,
+
+        ENEMY_BASE_SPEED: 0.8,
+
+        ENEMY_SPEED_INCREASE: 0.012,
+
+        ENEMY_MAX_EXTRA_SPEED: 2.0,
+
+        ENEMY_SPAWN_INITIAL_INTERVAL: 15,
+
+        ENEMY_MIN_SPAWN_INTERVAL: 5,
+
+        ENEMY_DISTANCE_MIN: 60,
+
+        ENEMY_DISTANCE_MAX: 80,
+
+        CHARACTER_HEIGHT: 1.8,
+
+        // Si el modelo aparece mirando hacia atrás,
+        // cambia Math.PI por 0.
+        MODEL_FORWARD_OFFSET: Math.PI,
+
+        CAMERA_HEIGHT: 7,
+
+        CAMERA_DISTANCE: 11,
+
+        FOG_NEAR: 120,
+
+        FOG_FAR: 420
+    };
+
+// =========================================================
+// 3. RUTAS DE LOS RECURSOS
+// =========================================================
+
+const ASSETS = {
+
+    character: "./assets/character/character.fbx",
+
+    animations: {
+
+        idle: "./assets/character/idle.fbx",
+
+        idle2: "./assets/character/idle_2.fbx",
+
+        walk: "./assets/character/walk.fbx",
+
+        attack1: "./assets/character/attack_1.fbx",
+
+        attack2: "./assets/character/attack_2.fbx",
+
+        defeated: "./assets/character/defeated.fbx"
+    },
+
+    groundTexture: "./assets/environment/ground.jpg",
+
+    hdr: "./assets/environment/environment.hdr",
+
+    rock: "./assets/objects/piedra/namaqualand_boulder_02_2k.gltf",
+
+    enemyType1: "./assets/enemies/rata/street_rat_2k.gltf"
+};
+
+    // =========================================================
+    // 4. VARIABLES GLOBALES
+    // =========================================================
+
+    const statusElement = document.getElementById("status");
+    const loadingElement = document.getElementById("loading");
+
+    const healthFill = document.getElementById("healthFill");
+    const healthLabel = document.getElementById("healthLabel");
+
+    const enemyCountElement = document.getElementById("enemyCount");
+    const gameTimeElement = document.getElementById("gameTime");
+
+    const gameOverElement = document.getElementById("gameOver");
+
+    let health = CONFIG.INITIAL_HEALTH;
+
+    let gameOver = false;
+
+    let gameElapsed = 0;
+
+    let enemySpawnTimer = 0;
+
+    let pickupRespawnTimer = 0;
+
+    let idleTimer = 0;
+
+    let idle2Played = false;
+
+    let attackTimer = 0;
+
+    let attackWindowRemaining = 0;
+
+    let activeAttack = null;
+
+    let targetYaw = 0;
+
+    let backTurnActive = false;
+
+    let currentAction = null;
+
+    let currentAnimationName = "";
+
+    let currentAttackAnimation = null;
+
+    let mixer = null;
+
+    const actions = {};
+
+    const keys = {};
+
+    const enemies = [];
+
+    const pickups = [];
+
+    const obstacles = [];
+
+    const enemyByBody = new Map();
+
+    const UP = new THREE.Vector3(0, 1, 0);
+
+
+    // =========================================================
+    // 5. ESCENA THREE.JS
+    // =========================================================
+
+    const scene = new THREE.Scene();
+
+    scene.background = new THREE.Color(0x8996a0);
+
+    // Niebla gris clara.
+    scene.fog = new THREE.Fog(
+        0xcfd1d3,
+        CONFIG.FOG_NEAR,
+        CONFIG.FOG_FAR
+    );
+
+
+    // =========================================================
+    // 6. CÁMARA Y RENDERIZADOR
+    // =========================================================
+
+    const camera = new THREE.PerspectiveCamera(
+        65,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1200
+    );
+
+    camera.position.set(0, 8, 12);
+
+    camera.lookAt(0, 1, 0);
+
+
+    const renderer = new THREE.WebGLRenderer({
+        antialias: true
+    });
+
+    renderer.setSize(
+        window.innerWidth,
+        window.innerHeight
+    );
+
+    renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio, 2)
+    );
+
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    renderer.toneMappingExposure = 1.0;
+
+    renderer.shadowMap.enabled = true;
+
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    document.body.appendChild(renderer.domElement);
+
+
+    // =========================================================
+    // 7. ILUMINACIÓN
+    // =========================================================
+
+    const hemisphereLight = new THREE.HemisphereLight(
+        0xe4edff,
+        0x686052,
+        1.5
+    );
+
+    scene.add(hemisphereLight);
+
+
+    const sunlight = new THREE.DirectionalLight(
+        0xffffff,
+        2.2
+    );
+
+    sunlight.position.set(-70, 120, 60);
+
+    sunlight.castShadow = true;
+
+    sunlight.shadow.mapSize.set(2048, 2048);
+
+    sunlight.shadow.camera.left = -100;
+    sunlight.shadow.camera.right = 100;
+
+    sunlight.shadow.camera.top = 100;
+    sunlight.shadow.camera.bottom = -100;
+
+    scene.add(sunlight);
+
+
+    // =========================================================
+    // 8. AMBIENTE HDR 360°
+    // =========================================================
+
+    async function loadHDR() {
+
+        try {
+
+            const rgbeLoader = new RGBELoader();
+
+            const hdrTexture = await rgbeLoader.loadAsync(
+                ASSETS.hdr
+            );
+
+            hdrTexture.mapping =
+                THREE.EquirectangularReflectionMapping;
+
+            scene.background = hdrTexture;
+
+            const pmremGenerator =
+                new THREE.PMREMGenerator(renderer);
+
+            pmremGenerator.compileEquirectangularShader();
+
+            const environment =
+                pmremGenerator.fromEquirectangular(hdrTexture);
+
+            scene.environment = environment.texture;
+
+            pmremGenerator.dispose();
+
+            console.log("HDR cargado correctamente.");
+
+        } catch (error) {
+
+            console.warn("No se pudo cargar el HDR:", error);
+
+            scene.background = new THREE.Color(0x8996a0);
+        }
+    }
+
+
+    // =========================================================
+    // 9. PISO TEXTURIZADO
+    // =========================================================
+
+    const groundGeometry = new THREE.PlaneGeometry(
+        CONFIG.MAP_SIZE,
+        CONFIG.MAP_SIZE
+    );
+
+    const groundMaterial = new THREE.MeshStandardMaterial({
+
+        color: 0x777777,
+
+        roughness: 0.95,
+
+        metalness: 0
+    });
+
+
+    const ground = new THREE.Mesh(
+        groundGeometry,
+        groundMaterial
+    );
+
+    ground.rotation.x = -Math.PI / 2;
+
+    ground.position.y = 0;
+
+    ground.receiveShadow = true;
+
+    scene.add(ground);
+
+
+    async function loadGroundTexture() {
+
+        try {
+
+            const loader = new THREE.TextureLoader();
+
+            const texture = await loader.loadAsync(
+                ASSETS.groundTexture
+            );
+
+            texture.colorSpace = THREE.SRGBColorSpace;
+
+            texture.wrapS = THREE.RepeatWrapping;
+
+            texture.wrapT = THREE.RepeatWrapping;
+
+            texture.repeat.set(80, 80);
+
+            texture.anisotropy =
+                renderer.capabilities.getMaxAnisotropy();
+
+            ground.material.map = texture;
+
+            ground.material.color.set(0xffffff);
+
+            ground.material.needsUpdate = true;
+
+            console.log("Textura del piso cargada.");
+
+        } catch (error) {
+
+            console.warn("Error cargando textura del piso:", error);
+        }
+    }
+
+
+    // =========================================================
+    // 10. MUNDO FÍSICO CANNON-ES
+    // =========================================================
+
+    const physicsWorld = new CANNON.World({
+
+        gravity: new CANNON.Vec3(0, -9.82, 0)
+    });
+
+    physicsWorld.allowSleep = true;
+
+    physicsWorld.defaultContactMaterial.friction = 0.65;
+
+    physicsWorld.defaultContactMaterial.restitution = 0.05;
+
+
+    // Grupos de colisión.
+
+    const GROUP = {
+
+        PLAYER: 1,
+
+        ENEMY: 2,
+
+        OBSTACLE: 4,
+
+        PICKUP: 8,
+
+        FLOOR: 16,
+
+        ATTACK_SENSOR: 32,
+
+        ENEMY_SENSOR: 64,
+
+        WALL: 128
+    };
+
+
+    // =========================================================
+    // 11. FÍSICA DEL PISO
+    // =========================================================
+
+    const floorBody = new CANNON.Body({
+
+        mass: 0,
+
+        collisionFilterGroup: GROUP.FLOOR,
+
+        collisionFilterMask:
+            GROUP.PLAYER | GROUP.ENEMY
+    });
+
+    floorBody.addShape(new CANNON.Plane());
+
+    floorBody.quaternion.setFromEuler(
+        -Math.PI / 2,
+        0,
+        0
+    );
+
+    physicsWorld.addBody(floorBody);
+
+
+    // =========================================================
+    // 12. LÍMITES DEL ESCENARIO
+    // =========================================================
+
+    function createWall(x, y, z, width, height, depth) {
+
+        const body = new CANNON.Body({
+
+            mass: 0,
+
+            position: new CANNON.Vec3(x, y, z),
+
+            collisionFilterGroup: GROUP.WALL,
+
+            collisionFilterMask:
+                GROUP.PLAYER | GROUP.ENEMY
+        });
+
+        body.addShape(
+            new CANNON.Box(
+                new CANNON.Vec3(
+                    width / 2,
+                    height / 2,
+                    depth / 2
+                )
+            )
+        );
+
+        physicsWorld.addBody(body);
+
+
+        const mesh = new THREE.Mesh(
+
+            new THREE.BoxGeometry(width, height, depth),
+
+            new THREE.MeshBasicMaterial({
+
+                color: 0x64748b,
+
+                transparent: true,
+
+                opacity: 0.18
+            })
+        );
+
+        mesh.position.set(x, y, z);
+
+        scene.add(mesh);
+    }
+
+
+    function createWorldBoundaries() {
+
+        const half = CONFIG.MAP_SIZE / 2;
+
+        const height = 12;
+
+        const thickness = 5;
+
+        createWall(
+            0,
+            height / 2,
+            -half,
+            CONFIG.MAP_SIZE,
+            height,
+            thickness
+        );
+
+        createWall(
+            0,
+            height / 2,
+            half,
+            CONFIG.MAP_SIZE,
+            height,
+            thickness
+        );
+
+        createWall(
+            -half,
+            height / 2,
+            0,
+            thickness,
+            height,
+            CONFIG.MAP_SIZE
+        );
+
+        createWall(
+            half,
+            height / 2,
+            0,
+            thickness,
+            height,
+            CONFIG.MAP_SIZE
+        );
+    }
+
+    createWorldBoundaries();
+
+
+    // =========================================================
+    // 13. OBSTÁCULOS ESTÁTICOS PROVISIONALES
+    // =========================================================
+
+    const obstacleDefinitions = [
+
+        { x: -28, z: 20, w: 12, h: 3, d: 8 },
+
+        { x: 42, z: 35, w: 7, h: 4, d: 10 },
+
+        { x: -48, z: -40, w: 10, h: 3, d: 10 },
+
+        { x: 5, z: 55, w: 8, h: 3, d: 8 }
+    ];
+
+
+    function createStaticObstacle(data) {
+
+        const geometry = new THREE.BoxGeometry(
+            data.w,
+            data.h,
+            data.d
+        );
+
+        const material = new THREE.MeshStandardMaterial({
+
+            color: 0x626262,
+
+            roughness: 0.95
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+
+        mesh.position.set(
+            data.x,
+            data.h / 2,
+            data.z
+        );
+
+        mesh.castShadow = true;
+
+        mesh.receiveShadow = true;
+
+        scene.add(mesh);
+
+
+        const body = new CANNON.Body({
+
+            mass: 0,
+
+            position: new CANNON.Vec3(
+                data.x,
+                data.h / 2,
+                data.z
+            ),
+
+            collisionFilterGroup: GROUP.OBSTACLE,
+
+            collisionFilterMask:
+                GROUP.PLAYER | GROUP.ENEMY
+        });
+
+        body.addShape(
+            new CANNON.Box(
+                new CANNON.Vec3(
+                    data.w / 2,
+                    data.h / 2,
+                    data.d / 2
+                )
+            )
+        );
+
+        physicsWorld.addBody(body);
+
+        obstacles.push({
+            mesh,
+            body,
+            x: data.x,
+            z: data.z,
+            radius: Math.max(data.w, data.d) / 2
+        });
+    }
+
+
+    // Los obstáculos se crearán usando el modelo 3D de la roca.
+
+
+    // =========================================================
+    // 13.1. MODELO 3D DE ROCA (POLY HAVEN)
+    // =========================================================
+
+    const gltfLoader = new GLTFLoader();
+
+    // Plantilla del modelo 3D para los enemigos tipo 1 (ratas).
+    let ratEnemyTemplate = null;
+
+    async function loadRatEnemyModel() {
+
+        try {
+
+            console.log("Cargando rata:", ASSETS.enemyType1);
+
+            const gltf = await gltfLoader.loadAsync(ASSETS.enemyType1);
+            ratEnemyTemplate = gltf.scene;
+
+            ratEnemyTemplate.updateMatrixWorld(true);
+
+            // Preparar sombras y materiales del modelo original.
+            ratEnemyTemplate.traverse(object => {
+                if (object.isMesh) {
+                    object.castShadow = true;
+                    object.receiveShadow = true;
+                    object.frustumCulled = false;
+                }
+            });
+
+            console.log("Modelo de rata cargado correctamente.");
+            return true;
+
+        } catch (error) {
+
+            console.error("No se pudo cargar el modelo de rata:", error);
+            ratEnemyTemplate = null;
+            return false;
+        }
+    }
+
+    async function loadRockModel() {
+
+        // Posición del primer obstáculo y posiciones de los rectángulos
+        // que ya estaban definidos en el escenario.
+        const rockPositions = [
+            { x: 25, z: -25 },
+            ...obstacleDefinitions.map(item => ({
+                x: item.x,
+                z: item.z
+            }))
+        ];
+
+        try {
+
+            setStatus("Cargando modelos 3D de las rocas...");
+
+            const gltf = await gltfLoader.loadAsync(ASSETS.rock);
+
+            const rockTemplate = gltf.scene;
+
+            rockTemplate.updateMatrixWorld(true);
+
+            // Calcular el tamaño original del modelo.
+            const originalBox = new THREE.Box3().setFromObject(rockTemplate);
+            const originalSize = originalBox.getSize(new THREE.Vector3());
+
+            const largestDimension = Math.max(
+                originalSize.x,
+                originalSize.y,
+                originalSize.z
+            );
+
+            if (!largestDimension || !Number.isFinite(largestDimension)) {
+                throw new Error("El modelo de roca no tiene dimensiones válidas.");
+            }
+
+            // Todas las copias tendrán una escala uniforme.
+            const desiredLargestDimension = 9;
+            const scale = desiredLargestDimension / largestDimension;
+
+            // Preparar materiales y sombras una sola vez en el modelo base.
+            rockTemplate.traverse(object => {
+
+                if (object.isMesh) {
+
+                    object.castShadow = true;
+                    object.receiveShadow = true;
+
+                    if (object.material) {
+                        const materials = Array.isArray(object.material)
+                            ? object.material
+                            : [object.material];
+
+                        materials.forEach(material => {
+                            material.needsUpdate = true;
+                        });
+                    }
+                }
+            });
+
+            // Crear una roca en cada posición donde antes había un rectángulo.
+            for (const position of rockPositions) {
+
+                const rock = rockTemplate.clone(true);
+
+                rock.scale.setScalar(scale);
+                rock.updateMatrixWorld(true);
+
+                // Colocar la base de cada roca sobre el piso.
+                const scaledBox = new THREE.Box3().setFromObject(rock);
+                rock.position.y -= scaledBox.min.y;
+
+                rock.position.x = position.x;
+                rock.position.z = position.z;
+
+                // Variar ligeramente la orientación para que no se vean idénticas.
+                rock.rotation.y = (Math.random() - 0.5) * Math.PI * 2;
+
+                scene.add(rock);
+                rock.updateMatrixWorld(true);
+
+                // Crear una colisión aproximada para cada roca.
+                const finalBox = new THREE.Box3().setFromObject(rock);
+                const finalSize = finalBox.getSize(new THREE.Vector3());
+                const finalCenter = finalBox.getCenter(new THREE.Vector3());
+
+                const halfExtents = new CANNON.Vec3(
+                    Math.max(finalSize.x / 2, 0.25),
+                    Math.max(finalSize.y / 2, 0.25),
+                    Math.max(finalSize.z / 2, 0.25)
+                );
+
+                const rockBody = new CANNON.Body({
+                    mass: 0,
+                    position: new CANNON.Vec3(
+                        finalCenter.x,
+                        finalCenter.y,
+                        finalCenter.z
+                    ),
+                    collisionFilterGroup: GROUP.OBSTACLE,
+                    collisionFilterMask: GROUP.PLAYER | GROUP.ENEMY
+                });
+
+                rockBody.addShape(new CANNON.Box(halfExtents));
+                physicsWorld.addBody(rockBody);
+
+                obstacles.push({
+                    mesh: rock,
+                    body: rockBody,
+                    x: position.x,
+                    z: position.z,
+                    radius: Math.max(finalSize.x, finalSize.z) / 2
+                });
+            }
+
+            console.log(
+                `${rockPositions.length} rocas de Poly Haven cargadas correctamente.`
+            );
+
+            setStatus("Rocas 3D cargadas correctamente.");
+
+        } catch (error) {
+
+            console.error("No se pudieron cargar las rocas 3D:", error);
+
+            // Si falla el modelo, se conservan obstáculos provisionales
+            // en todas las posiciones para mantener la jugabilidad.
+            for (const position of rockPositions) {
+
+                const definition = obstacleDefinitions.find(item =>
+                    item.x === position.x && item.z === position.z
+                );
+
+                createStaticObstacle({
+                    x: position.x,
+                    z: position.z,
+                    w: definition ? definition.w : 9,
+                    h: definition ? definition.h : 3,
+                    d: definition ? definition.d : 9
+                });
+            }
+
+            setStatus("No se pudieron cargar las rocas. Se colocaron obstáculos provisionales.");
+        }
+    }
+
+
+    // =========================================================
+    // 14. PERSONAJE: CUERPO FÍSICO
+    // =========================================================
+
+    const playerBody = new CANNON.Body({
+
+        mass: 8,
+
+        position: new CANNON.Vec3(0, 0.82, 0),
+
+        fixedRotation: true,
+
+        linearDamping: 0.05,
+
+        angularDamping: 1,
+
+        allowSleep: false,
+
+        collisionFilterGroup: GROUP.PLAYER,
+
+        collisionFilterMask:
+            GROUP.ENEMY |
+            GROUP.OBSTACLE |
+            GROUP.FLOOR |
+            GROUP.PICKUP |
+            GROUP.ENEMY_SENSOR |
+            GROUP.WALL
+    });
+
+
+    // Cilindro vertical como aproximación del personaje.
+    playerBody.addShape(
+
+        new CANNON.Cylinder(
+            0.45,
+            0.45,
+            1.6,
+            10
+        )
+    );
+
+
+    // El personaje no se desplaza verticalmente.
+    playerBody.linearFactor.set(1, 0, 1);
+
+    playerBody.angularFactor.set(0, 0, 0);
+
+    physicsWorld.addBody(playerBody);
+
+
+    // =========================================================
+    // 15. PERSONAJE: GEOMETRÍA VISUAL PROVISIONAL
+    // =========================================================
+
+    const playerRoot = new THREE.Group();
+
+    scene.add(playerRoot);
+
+
+    const modelOffset = new THREE.Group();
+
+    modelOffset.rotation.y = CONFIG.MODEL_FORWARD_OFFSET;
+
+    playerRoot.add(modelOffset);
+
+
+    function createFallbackCharacter() {
+
+        const fallback = new THREE.Group();
+
+
+        const bodyMaterial = new THREE.MeshStandardMaterial({
+
+            color: 0x2785a5,
+
+            roughness: 0.7
+        });
+
+
+        const bodyGeometry = new THREE.CapsuleGeometry(
+            0.38,
+            0.9,
+            6,
+            12
+        );
+
+        const bodyMesh = new THREE.Mesh(
+            bodyGeometry,
+            bodyMaterial
+        );
+
+        bodyMesh.position.y = 0.85;
+
+        bodyMesh.castShadow = true;
+
+        fallback.add(bodyMesh);
+
+
+        const head = new THREE.Mesh(
+
+            new THREE.SphereGeometry(0.27, 16, 16),
+
+            new THREE.MeshStandardMaterial({
+                color: 0xc99e7c
+            })
+        );
+
+        head.position.y = 1.75;
+
+        head.castShadow = true;
+
+        fallback.add(head);
+
+
+        return fallback;
+    }
+
+
+    const fallbackCharacter = createFallbackCharacter();
+
+    modelOffset.add(fallbackCharacter);
+
+
+    // =========================================================
+    // 16. CARGA DEL PERSONAJE FBX
+    // =========================================================
+
+    const fbxLoader = new FBXLoader();
+
+
+    function normalizeCharacterModel(model) {
+
+        model.updateMatrixWorld(true);
+
+        const originalBox = new THREE.Box3().setFromObject(model);
+
+        const originalSize = originalBox.getSize(
+            new THREE.Vector3()
+        );
+
+        if (originalSize.y <= 0) {
+
+            throw new Error(
+                "El modelo FBX no tiene una altura válida."
+            );
+        }
+
+
+        // Ajusta automáticamente la altura del personaje.
+        const scale =
+            CONFIG.CHARACTER_HEIGHT / originalSize.y;
+
+        model.scale.multiplyScalar(scale);
+
+        model.updateMatrixWorld(true);
+
+
+        const box = new THREE.Box3().setFromObject(model);
+
+        const center = box.getCenter(new THREE.Vector3());
+
+
+        // Centrar horizontalmente y colocar los pies en y = 0.
+        model.position.x -= center.x;
+
+        model.position.z -= center.z;
+
+        model.position.y -= box.min.y;
+
+
+        model.traverse(object => {
+
+            if (object.isMesh) {
+
+                object.castShadow = true;
+
+                object.receiveShadow = true;
+
+                object.frustumCulled = false;
+            }
+        });
+    }
+
+
+    async function loadCharacterModel() {
+
+        console.log("Intentando cargar:", ASSETS.character);
+
+        try {
+
+            const character = await fbxLoader.loadAsync(
+                ASSETS.character
+            );
+
+            console.log("FBX recibido:", character);
+
+            console.log(
+                "Animaciones incluidas:",
+                character.animations.length
+            );
+
+            normalizeCharacterModel(character);
+
+            modelOffset.remove(fallbackCharacter);
+
+            modelOffset.add(character);
+
+            mixer = new THREE.AnimationMixer(character);
+
+            console.log("Personaje agregado correctamente a la escena.");
+
+            return true;
+
+        } catch (error) {
+
+            console.error("ERROR AL CARGAR EL PERSONAJE:", error);
+
+            setStatus("Error al cargar el personaje. Consulta la consola.");
+
+            return false;
+        }
+    }
+
+
+    // =========================================================
+    // 17. CARGA DE ANIMACIONES FBX
+    // =========================================================
+
+    async function loadAnimation(name, path) {
+        console.log("Cargando animación:", name, path);
+        if (!mixer) return;
+
+        try {
+
+            const animationFBX =
+                await fbxLoader.loadAsync(path);
+
+            if (
+                !animationFBX.animations ||
+                animationFBX.animations.length === 0
+            ) {
+
+                throw new Error(
+                    "El FBX no contiene animaciones."
+                );
+            }
+
+
+            // Utilizamos el primer AnimationClip del archivo.
+            const clip = animationFBX.animations[0];
+
+            const action = mixer.clipAction(clip);
+
+
+            const loopingAnimations = [
+                "idle",
+                "walk"
+            ];
+
+
+            if (loopingAnimations.includes(name)) {
+
+                action.setLoop(THREE.LoopRepeat, Infinity);
+
+            } else {
+
+                action.setLoop(THREE.LoopOnce, 1);
+
+                action.clampWhenFinished =
+                    name === "defeated";
+            }
+
+
+            action.enabled = true;
+
+            actions[name] = action;
+
+
+            console.log(
+                "Animación cargada:",
+                name,
+                "Duración:",
+                clip.duration
+            );
+
+        } catch (error) {
+
+            console.warn(
+                "No se pudo cargar la animación:",
+                name,
+                error
+            );
+        }
+    }
+
+
+    // =========================================================
+    // 18. CONTROL DEL ANIMATION MIXER
+    // =========================================================
+
+    function playAnimation(
+        name,
+        fadeDuration = 0.18,
+        timeScale = 1
+    ) {
+
+        const nextAction = actions[name];
+
+        currentAnimationName = name;
+
+        if (!nextAction) {
+
+            return false;
+        }
+
+        if (currentAction === nextAction) {
+
+            return true;
+        }
+
+
+        nextAction.reset();
+
+        nextAction.enabled = true;
+
+        nextAction.setEffectiveWeight(1);
+
+        nextAction.setEffectiveTimeScale(timeScale);
+
+        nextAction.fadeIn(fadeDuration);
+
+        nextAction.play();
+
+
+        if (currentAction) {
+
+            currentAction.fadeOut(fadeDuration);
+        }
+
+        currentAction = nextAction;
+
+        return true;
+    }
+
+
+    function finishAttack(name) {
+
+        if (currentAttackAnimation !== name) return;
+
+        currentAttackAnimation = null;
+
+        attackTimer = 0;
+
+        activeAttack = null;
+
+        attackWindowRemaining = 0;
+    }
+
+
+    function setupMixerEvents() {
+
+        if (!mixer) return;
+
+        mixer.addEventListener("finished", event => {
+
+            const finishedName = Object.keys(actions).find(
+
+                name => actions[name] === event.action
+            );
+
+
+            if (
+                finishedName === "attack1" ||
+                finishedName === "attack2"
+            ) {
+
+                finishAttack(finishedName);
+            }
+
+
+            if (finishedName === "idle2") {
+
+                playAnimation("idle");
+            }
+        });
+    }
+
+
+    async function loadCharacterAndAnimations() {
+
+        const loaded = await loadCharacterModel();
+
+        if (!loaded) return;
+
+
+        for (const [name, path] of Object.entries(
+            ASSETS.animations
+        )) {
+
+            await loadAnimation(name, path);
+        }
+
+
+        setupMixerEvents();
+
+        playAnimation("idle");
+
+
+        console.log("Carga de animaciones finalizada.");
+    }
+
+
+    // =========================================================
+    // 19. SENSOR DE ATAQUE DE 180 GRADOS
+    // =========================================================
+
+    const attackSensor = new CANNON.Body({
+
+        mass: 0,
+
+        type: CANNON.Body.KINEMATIC,
+
+        isTrigger: true,
+
+        position: new CANNON.Vec3(0, 0.82, 0),
+
+        collisionFilterGroup: GROUP.ATTACK_SENSOR,
+
+        collisionFilterMask: GROUP.ENEMY_SENSOR
+
+    });
+
+
+    attackSensor.addShape(
+        new CANNON.Sphere(CONFIG.ATTACK_RANGE)
+    );
+
+    physicsWorld.addBody(attackSensor);
+
+
+    attackSensor.addEventListener("collide", event => {
+
+        const enemy = enemyByBody.get(event.body);
+
+        if (enemy && !enemy.repelled) {
+
+            enemy.inAttackArea = true;
+        }
+    });
+
+
+    // =========================================================
+    // 20. CREACIÓN DE ENEMIGOS
+    // =========================================================
+
+    function createEnemyVisual(type) {
+
+        const group = new THREE.Group();
+
+        // TODOS LOS TIPOS DE ENEMIGO: utilizan el mismo modelo 3D de rata.
+        if (ratEnemyTemplate) {
+
+            const rat = ratEnemyTemplate.clone(true);
+            rat.updateMatrixWorld(true);
+
+            // Escalar automáticamente la rata a una altura de 1.6 unidades.
+            const originalBox = new THREE.Box3().setFromObject(rat);
+            const originalSize = originalBox.getSize(new THREE.Vector3());
+
+            if (originalSize.y > 0) {
+                rat.scale.multiplyScalar(1.6 / originalSize.y);
+            }
+
+            rat.updateMatrixWorld(true);
+
+            // Centrar el modelo y apoyar sus patas en el suelo.
+            const ratBox = new THREE.Box3().setFromObject(rat);
+            const ratCenter = ratBox.getCenter(new THREE.Vector3());
+
+            rat.position.x -= ratCenter.x;
+            rat.position.z -= ratCenter.z;
+            rat.position.y -= ratBox.min.y;
+
+            rat.traverse(object => {
+                if (object.isMesh) {
+                    object.castShadow = true;
+                    object.receiveShadow = true;
+                    object.frustumCulled = false;
+                }
+            });
+
+            group.add(rat);
+
+        } else {
+
+            // Respaldo visual únicamente si el archivo GLTF no pudo cargarse.
+            const color = type === 1 ? 0xe74747 : 0x4e83ed;
+
+            const material = new THREE.MeshStandardMaterial({
+                color,
+                roughness: 0.55,
+                metalness: 0.1,
+                emissive: color,
+                emissiveIntensity: 0.12
+            });
+
+            const core = new THREE.Mesh(
+                new THREE.IcosahedronGeometry(0.85, 1),
+                material
+            );
+
+            core.position.y = 0.85;
+            core.castShadow = true;
+            group.add(core);
+
+            const eyeMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: 0xffffff,
+                emissiveIntensity: 0.5
+            });
+
+            for (let i = 0; i < 2; i++) {
+                const eye = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.12, 8, 8),
+                    eyeMaterial
+                );
+
+                eye.position.set(
+                    i === 0 ? -0.25 : 0.25,
+                    1.02,
+                    -0.69
+                );
+
+                group.add(eye);
+            }
+        }
+
+        scene.add(group);
+        return group;
+    }
+
+
+    function createEnemy(type, x, z) {
+
+        const visual = createEnemyVisual(type);
+
+
+        const body = new CANNON.Body({
+
+            mass: 1.6,
+
+            position: new CANNON.Vec3(x, 0.85, z),
+
+            fixedRotation: true,
+
+            linearDamping: 0.08,
+
+            angularDamping: 1,
+
+            collisionFilterGroup: GROUP.ENEMY,
+
+            collisionFilterMask:
+				GROUP.PLAYER |
+				GROUP.ENEMY |
+				GROUP.OBSTACLE |
+				GROUP.FLOOR |
+				GROUP.WALL |
+				GROUP.ATTACK_SENSOR
+        });
+
+
+        body.addShape(
+            new CANNON.Sphere(0.85)
+        );
+
+        body.linearFactor.set(1, 0, 1);
+
+        body.angularFactor.set(0, 0, 0);
+
+        physicsWorld.addBody(body);
+
+
+        const enemy = {
+
+            type,
+
+            mesh: visual,
+
+            body,
+
+            sensorBody: null,
+
+            touchingPlayer: false,
+
+            inAttackArea: false,
+
+            damageCooldown: 0,
+
+            repelled: false,
+
+            repelTimer: 0,
+
+            lastAttackId: -1
+        };
+
+
+        // Sensor de proximidad individual del enemigo.
+
+        const sensorBody = new CANNON.Body({
+
+            mass: 0,
+
+            type: CANNON.Body.KINEMATIC,
+
+            isTrigger: true,
+
+            position: new CANNON.Vec3(x, 0.85, z),
+
+            collisionFilterGroup: GROUP.ENEMY_SENSOR,
+
+            collisionFilterMask: GROUP.PLAYER | GROUP.ATTACK_SENSOR
+        });
+
+
+        sensorBody.addShape(
+            new CANNON.Sphere(CONFIG.DAMAGE_RADIUS)
+        );
+
+
+        sensorBody.addEventListener("collide", event => {
+
+            if (event.body === playerBody) {
+
+                enemy.touchingPlayer = true;
+            }
+        });
+
+
+        enemy.sensorBody = sensorBody;
+
+        physicsWorld.addBody(sensorBody);
+
+
+        enemyByBody.set(body, enemy);
+        enemyByBody.set(sensorBody, enemy);
+
+        enemies.push(enemy);
+
+
+        return enemy;
+    }
+
+
+    // =========================================================
+    // 21. POSICIONES ALEATORIAS PARA ENEMIGOS
+    // =========================================================
+
+    function getEnemySpawnPosition() {
+
+        const angle = Math.random() * Math.PI * 2;
+
+        const distance =
+            CONFIG.ENEMY_DISTANCE_MIN +
+            Math.random() *
+            (
+                CONFIG.ENEMY_DISTANCE_MAX -
+                CONFIG.ENEMY_DISTANCE_MIN
+            );
+
+
+        let x =
+            playerBody.position.x +
+            Math.cos(angle) * distance;
+
+        let z =
+            playerBody.position.z +
+            Math.sin(angle) * distance;
+
+
+        const limit = CONFIG.MAP_SIZE / 2 - 15;
+
+        x = THREE.MathUtils.clamp(x, -limit, limit);
+
+        z = THREE.MathUtils.clamp(z, -limit, limit);
+
+
+        // Evita aparecer dentro de un obstáculo.
+        for (let attempt = 0; attempt < 15; attempt++) {
+
+            const blocked = obstacles.some(obstacle => {
+
+                const dx = x - obstacle.x;
+
+                const dz = z - obstacle.z;
+
+                return Math.hypot(dx, dz) <
+                    obstacle.radius + 4;
+            });
+
+
+            if (!blocked) break;
+
+
+            const newAngle = Math.random() * Math.PI * 2;
+
+            x =
+                playerBody.position.x +
+                Math.cos(newAngle) * distance;
+
+            z =
+                playerBody.position.z +
+                Math.sin(newAngle) * distance;
+
+            x = THREE.MathUtils.clamp(x, -limit, limit);
+
+            z = THREE.MathUtils.clamp(z, -limit, limit);
+        }
+
+
+        return { x, z };
+    }
+
+
+    function spawnEnemy(type = Math.random() < 0.5 ? 1 : 2) {
+
+        const position = getEnemySpawnPosition();
+
+        createEnemy(type, position.x, position.z);
+    }
+
+
+    function createInitialEnemies() {
+
+        // Cinco enemigos iniciales, repartidos entre los dos tipos.
+
+        for (let i = 0; i < CONFIG.INITIAL_ENEMIES; i++) {
+
+            spawnEnemy(i % 2 === 0 ? 1 : 2);
+        }
+    }
+
+
+    // =========================================================
+    // 22. COMPORTAMIENTO DE LOS ENEMIGOS
+    // =========================================================
+
+    function updateEnemyAI(delta) {
+
+        if (gameOver) return;
+
+
+        const playerPosition = playerBody.position;
+
+
+        const speedIncrease = Math.min(
+
+            CONFIG.ENEMY_MAX_EXTRA_SPEED,
+
+            gameElapsed * CONFIG.ENEMY_SPEED_INCREASE
+        );
+
+
+        const enemySpeed =
+            CONFIG.ENEMY_BASE_SPEED + speedIncrease;
+
+
+        for (const enemy of enemies) {
+
+            if (enemy.repelled) continue;
+
+
+            const dx =
+                playerPosition.x - enemy.body.position.x;
+
+            const dz =
+                playerPosition.z - enemy.body.position.z;
+
+
+            const distance = Math.hypot(dx, dz);
+
+            if (distance < 0.01) continue;
+
+
+            const directionX = dx / distance;
+
+            const directionZ = dz / distance;
+
+
+            // Movimiento físico hacia el personaje.
+            enemy.body.velocity.x =
+                directionX * enemySpeed;
+
+            enemy.body.velocity.z =
+                directionZ * enemySpeed;
+        }
+    }
+
+
+    // =========================================================
+    // 23. REPULSIÓN DE ENEMIGOS
+    // =========================================================
+
+    let attackSequenceId = 0;
+
+
+    function getPlayerForward() {
+
+        return new THREE.Vector3(0, 0, -1)
+
+            .applyAxisAngle(
+                UP,
+                playerRoot.rotation.y
+            );
+    }
+
+
+    function isEnemyInsideFront180(enemy) {
+
+        const forward = getPlayerForward();
+
+
+        const direction = new THREE.Vector3(
+
+            enemy.body.position.x - playerBody.position.x,
+
+            0,
+
+            enemy.body.position.z - playerBody.position.z
+        );
+
+
+        if (direction.lengthSq() < 0.0001) {
+
+            return true;
+        }
+
+        direction.normalize();
+
+
+        // Producto escalar >= 0 equivale a un semicírculo frontal.
+        return forward.dot(direction) >= 0;
+    }
+
+
+    function repelEnemy(enemy) {
+
+        if (enemy.repelled) return;
+
+
+        enemy.repelled = true;
+
+        enemy.repelTimer = CONFIG.REPULSION_DURATION;
+
+
+        const direction = new CANNON.Vec3(
+
+            enemy.body.position.x - playerBody.position.x,
+
+            0,
+
+            enemy.body.position.z - playerBody.position.z
+        );
+
+
+        if (direction.lengthSquared() < 0.0001) {
+
+            const forward = getPlayerForward();
+
+            direction.set(
+                forward.x,
+                0,
+                forward.z
+            );
+
+        } else {
+
+            direction.normalize();
+        }
+
+
+        const impulse = new CANNON.Vec3(
+
+            direction.x * CONFIG.REPULSION_IMPULSE,
+
+            0,
+
+            direction.z * CONFIG.REPULSION_IMPULSE
+        );
+
+
+        // Impulso físico real.
+        enemy.body.applyImpulse(
+            impulse,
+            new CANNON.Vec3(0, 0, 0)
+        );
+
+
+        // El enemigo ya no podrá causar daño.
+        physicsWorld.removeBody(enemy.sensorBody);
+
+
+        enemy.damageCooldown = 0;
+
+        console.log(
+            "Enemigo repelido. Tipo:",
+            enemy.type
+        );
+    }
+
+
+        function processAttackHits() {
+
+        if (
+            attackWindowRemaining <= 0 ||
+            activeAttack === null
+        ) {
+            return;
+        }
+
+        for (const enemy of enemies) {
+
+            if (enemy.repelled) continue;
+
+            // Comprueba que el ataque corresponda al enemigo.
+            if (enemy.type !== activeAttack) continue;
+
+            // Comprueba que esté delante del personaje.
+            if (!isEnemyInsideFront180(enemy)) continue;
+
+            // Calcula la distancia horizontal.
+            const dx = enemy.body.position.x - playerBody.position.x;
+            const dz = enemy.body.position.z - playerBody.position.z;
+
+            const distanceSquared = dx * dx + dz * dz;
+
+            if (distanceSquared > CONFIG.ATTACK_RANGE ** 2) {
+                continue;
+            }
+
+            // Evita golpear dos veces al mismo enemigo
+            // durante una misma secuencia de ataque.
+            if (enemy.lastAttackId === attackSequenceId) {
+                continue;
+            }
+
+            enemy.lastAttackId = attackSequenceId;
+
+            console.log(
+                "IMPACTO:",
+                enemy.type,
+                "Distancia:",
+                Math.sqrt(distanceSquared).toFixed(2)
+            );
+
+            repelEnemy(enemy);
+        }
+    }
+
+
+    // =========================================================
+    // 24. CONTROL DE LOS DOS ATAQUES
+    // =========================================================
+
+    function startAttack(type) {
+
+        if (gameOver) return;
+
+
+        const animationName =
+            type === 1 ? "attack1" : "attack2";
+
+
+        // Attack 1 tiene prioridad absoluta sobre Attack 2.
+        if (currentAttackAnimation === "attack1") {
+
+            return;
+        }
+
+
+        // Attack 2 no interrumpe Attack 1 ni a otro Attack 2.
+        if (
+            currentAttackAnimation === "attack2" &&
+            type === 2
+        ) {
+
+            return;
+        }
+
+
+        // Attack 1 puede interrumpir Attack 2.
+        if (
+            currentAttackAnimation === "attack2" &&
+            type === 1
+        ) {
+
+            if (actions.attack2) {
+
+                actions.attack2.stop();
+            }
+
+            if (currentAction === actions.attack2) {
+
+                currentAction = null;
+            }
+
+            currentAttackAnimation = null;
+        }
+
+
+        if (type === 1 && currentAttackAnimation === "attack1") {
+            return;
+        }
+
+
+        currentAttackAnimation = animationName;
+
+        activeAttack = type;
+
+        attackSequenceId++;
+
+
+        attackWindowRemaining = CONFIG.ATTACK_WINDOW;
+
+
+        const action = actions[animationName];
+
+
+        const clipDuration = action
+            ? action.getClip().duration
+            : 0.9;
+
+
+        attackTimer = Math.max(
+
+            0.45,
+
+            clipDuration / CONFIG.ATTACK_ANIMATION_SPEED
+        );
+
+
+        // Se detiene el desplazamiento durante el ataque.
+        playerBody.velocity.x = 0;
+
+        playerBody.velocity.z = 0;
+
+
+        playAnimation(
+
+            animationName,
+
+            0.08,
+
+            CONFIG.ATTACK_ANIMATION_SPEED
+        );
+    }
+
+
+    // Click izquierdo = ataque 1.
+    renderer.domElement.addEventListener(
+        "mousedown",
+        event => {
+
+            if (event.button === 0) {
+
+                startAttack(1);
+            }
+
+            if (event.button === 2) {
+
+                startAttack(2);
+            }
+        }
+    );
+
+
+    // Evita que el navegador abra el menú contextual.
+    window.addEventListener(
+        "contextmenu",
+        event => event.preventDefault()
+    );
+
+
+    // =========================================================
+    // 25. CURACIONES: GEOMETRÍA PROVISIONAL
+    // =========================================================
+
+    function createPickupVisual() {
+
+        const group = new THREE.Group();
+
+
+        const material = new THREE.MeshStandardMaterial({
+
+            color: 0x5cff8a,
+
+            emissive: 0x20ff62,
+
+            emissiveIntensity: 1.1,
+
+            metalness: 0.2,
+
+            roughness: 0.3
+        });
+
+
+        const crystal = new THREE.Mesh(
+
+            new THREE.OctahedronGeometry(0.8),
+
+            material
+        );
+
+        crystal.position.y = 1.1;
+
+        crystal.castShadow = true;
+
+        group.add(crystal);
+
+
+        const ring = new THREE.Mesh(
+
+            new THREE.TorusGeometry(1.0, 0.07, 8, 24),
+
+            new THREE.MeshStandardMaterial({
+
+                color: 0x8affad,
+
+                emissive: 0x29ff68,
+
+                emissiveIntensity: 0.7
+            })
+        );
+
+        ring.position.y = 0.75;
+
+        ring.rotation.x = Math.PI / 2;
+
+        group.add(ring);
+
+
+        scene.add(group);
+
+        return {
+            group,
+            crystal,
+            ring
+        };
+    }
+
+
+    // =========================================================
+    // 26. POSICIONES ALEATORIAS PARA CURACIONES
+    // =========================================================
+
+    function getPickupSpawnPosition() {
+
+        let x, z;
+
+        for (let i = 0; i < 30; i++) {
+
+            x = (Math.random() - 0.5) * 360;
+
+            z = (Math.random() - 0.5) * 360;
+
+
+            const farFromPlayer = Math.hypot(
+
+                x - playerBody.position.x,
+
+                z - playerBody.position.z
+            ) > 18;
+
+
+            const farFromObstacles = obstacles.every(
+
+                obstacle => Math.hypot(
+
+                    x - obstacle.x,
+
+                    z - obstacle.z
+
+                ) > obstacle.radius + 5
+            );
+
+
+            if (farFromPlayer && farFromObstacles) break;
+        }
+
+
+        return { x, z };
+    }
+
+
+    // =========================================================
+    // 27. CREACIÓN DE OBJETOS DE CURACIÓN
+    // =========================================================
+
+    function createHealthPickup(x, z) {
+
+        const visual = createPickupVisual();
+
+
+        visual.group.position.set(x, 0, z);
+
+
+        const body = new CANNON.Body({
+
+            mass: 0,
+
+            isTrigger: true,
+
+            collisionFilterGroup: GROUP.PICKUP,
+
+            collisionFilterMask: GROUP.PLAYER,
+
+            position: new CANNON.Vec3(x, 1.0, z)
+        });
+
+
+        body.addShape(
+            new CANNON.Sphere(CONFIG.PICKUP_RADIUS)
+        );
+
+
+        const pickup = {
+
+            group: visual.group,
+
+            crystal: visual.crystal,
+
+            ring: visual.ring,
+
+            body,
+
+            touching: false,
+
+            progress: 0,
+
+            nextHeal: CONFIG.HEAL_INTERVAL,
+
+            consumed: false
+        };
+
+
+        body.addEventListener("collide", event => {
+
+            if (event.body === playerBody) {
+
+                pickup.touching = true;
+            }
+        });
+
+
+        physicsWorld.addBody(body);
+
+        pickups.push(pickup);
+    }
+
+
+    function spawnPickup() {
+
+        const position = getPickupSpawnPosition();
+
+        createHealthPickup(
+            position.x,
+            position.z
+        );
+    }
+
+
+    function createInitialPickups() {
+
+        for (
+            let i = 0;
+            i < CONFIG.MAX_PICKUPS;
+            i++
+        ) {
+
+            spawnPickup();
+        }
+    }
+
+
+    // =========================================================
+    // 28. SISTEMA DE VIDA
+    // =========================================================
+
+    function updateHealthBar() {
+
+        const percentage =
+            (health / CONFIG.MAX_HEALTH) * 100;
+
+
+        healthFill.style.width =
+            `${percentage}%`;
+
+
+        healthLabel.textContent =
+            `VIDA: ${health} / ${CONFIG.MAX_HEALTH}%`;
+    }
+
+
+    function changeHealth(amount) {
+
+        if (gameOver) return;
+
+
+        health = THREE.MathUtils.clamp(
+
+            health + amount,
+
+            0,
+
+            CONFIG.MAX_HEALTH
+        );
+
+
+        updateHealthBar();
+
+
+        if (health <= 0) {
+
+            defeatPlayer();
+        }
+    }
+
+
+    // =========================================================
+    // 29. SISTEMA DE CURACIÓN PROGRESIVA
+    // =========================================================
+
+    function removePickup(pickup) {
+
+        physicsWorld.removeBody(pickup.body);
+
+        scene.remove(pickup.group);
+
+
+        const index = pickups.indexOf(pickup);
+
+        if (index !== -1) {
+
+            pickups.splice(index, 1);
+        }
+    }
+
+
+    function updatePickups(delta) {
+
+        for (const pickup of [...pickups]) {
+
+            if (pickup.consumed) continue;
+
+
+            if (pickup.touching) {
+
+                pickup.progress += delta;
+
+
+                while (
+                    pickup.progress >= pickup.nextHeal &&
+                    pickup.nextHeal <= CONFIG.HEAL_TOTAL_TIME
+                ) {
+
+                    changeHealth(CONFIG.HEAL_PERCENT);
+
+                    pickup.nextHeal += CONFIG.HEAL_INTERVAL;
+                }
+
+
+                // El objeto desaparece al completar 3 segundos.
+                if (
+                    pickup.progress >= CONFIG.HEAL_TOTAL_TIME
+                ) {
+
+                    pickup.consumed = true;
+
+                    removePickup(pickup);
+
+                    pickupRespawnTimer =
+                        CONFIG.PICKUP_RESPAWN_INTERVAL;
+                }
+            }
+        }
+    }
+
+
+    // =========================================================
+    // 30. DAÑO POR PROXIMIDAD
+    // =========================================================
+
+    function updateEnemyDamage(delta) {
+
+        if (gameOver) return;
+
+
+        const forward = getPlayerForward();
+
+        const halfAngleCos = Math.cos(
+
+            THREE.MathUtils.degToRad(
+                CONFIG.DAMAGE_HALF_ANGLE
+            )
+        );
+
+
+        for (const enemy of enemies) {
+
+            if (enemy.repelled) continue;
+
+
+            if (!enemy.touchingPlayer) {
+
+                enemy.damageCooldown = 0;
+
+                continue;
+            }
+
+
+            const direction = new THREE.Vector3(
+
+                enemy.body.position.x - playerBody.position.x,
+
+                0,
+
+                enemy.body.position.z - playerBody.position.z
+            );
+
+
+            if (direction.lengthSq() < 0.0001) continue;
+
+            direction.normalize();
+
+
+            // Solo produce daño cuando se encuentra delante.
+            if (forward.dot(direction) < halfAngleCos) {
+
+                enemy.damageCooldown = 0;
+
+                continue;
+            }
+
+
+            enemy.damageCooldown -= delta;
+
+
+            if (enemy.damageCooldown <= 0) {
+
+                changeHealth(-CONFIG.DAMAGE_PERCENT);
+
+                enemy.damageCooldown =
+                    CONFIG.DAMAGE_INTERVAL;
+            }
+        }
+    }
+
+
+    // =========================================================
+    // 31. ELIMINACIÓN DE ENEMIGOS REPelidos
+    // =========================================================
+
+    function removeEnemy(enemy) {
+
+        if (!enemy) return;
+
+
+        physicsWorld.removeBody(enemy.body);
+
+        physicsWorld.removeBody(enemy.sensorBody);
+
+        scene.remove(enemy.mesh);
+
+
+        enemyByBody.delete(enemy.body);
+
+
+        const index = enemies.indexOf(enemy);
+
+        if (index !== -1) {
+
+            enemies.splice(index, 1);
+        }
+    }
+
+
+    function updateRepelledEnemies(delta) {
+
+        for (const enemy of [...enemies]) {
+
+            if (!enemy.repelled) continue;
+
+
+            enemy.repelTimer -= delta;
+
+
+            const progress = THREE.MathUtils.clamp(
+
+                enemy.repelTimer /
+                CONFIG.REPULSION_DURATION,
+
+                0,
+
+                1
+            );
+
+
+            enemy.mesh.scale.setScalar(progress);
+
+
+            if (enemy.repelTimer <= 0) {
+
+                removeEnemy(enemy);
+            }
+        }
+    }
+
+    // =========================================================
+    // 32. CONTROL DEL PERSONAJE
+    // =========================================================
+
+    function normalizeAngle(angle) {
+
+        return Math.atan2(
+            Math.sin(angle),
+            Math.cos(angle)
+        );
+    }
+
+
+    function updatePlayerMovement(delta) {
+
+        if (gameOver) return;
+
+
+        if (!currentAttackAnimation) {
+
+            if (!backTurnActive) {
+
+                if (keys.KeyA && !keys.KeyD) {
+
+                    targetYaw += CONFIG.TURN_SPEED * delta;
+                }
+
+                if (keys.KeyD && !keys.KeyA) {
+
+                    targetYaw -= CONFIG.TURN_SPEED * delta;
+                }
+            }
+        }
+
+
+        // Rotación progresiva.
+        const difference = normalizeAngle(
+
+            targetYaw - playerRoot.rotation.y
+        );
+
+
+        const rotationSpeed = backTurnActive
+
+            ? CONFIG.BACK_TURN_SPEED
+
+            : CONFIG.TURN_SPEED;
+
+
+        const maxRotation = rotationSpeed * delta;
+
+
+        const rotationAmount = THREE.MathUtils.clamp(
+
+            difference,
+
+            -maxRotation,
+
+            maxRotation
+        );
+
+
+        playerRoot.rotation.y += rotationAmount;
+
+
+        if (
+            backTurnActive &&
+            Math.abs(difference) < 0.03
+        ) {
+
+            backTurnActive = false;
+        }
+
+
+        if (currentAttackAnimation) {
+
+            playerBody.velocity.x = 0;
+
+            playerBody.velocity.z = 0;
+
+            return;
+        }
+
+
+        if (keys.KeyW) {
+
+            const forward = getPlayerForward();
+
+
+            playerBody.velocity.x =
+                forward.x * CONFIG.PLAYER_SPEED;
+
+            playerBody.velocity.z =
+                forward.z * CONFIG.PLAYER_SPEED;
+
+        } else {
+
+            playerBody.velocity.x = 0;
+
+            playerBody.velocity.z = 0;
+        }
+    }
+
+
+    // =========================================================
+    // 33. DETECCIÓN DEL ESTADO DE ANIMACIÓN
+    // =========================================================
+
+    function updateLocomotionAnimation(delta) {
+
+        if (gameOver) return;
+
+        if (currentAttackAnimation) return;
+
+
+        const moving =
+            keys.KeyW ||
+            keys.KeyA ||
+            keys.KeyD ||
+            backTurnActive;
+
+
+        if (moving) {
+
+            idleTimer = 0;
+
+            idle2Played = false;
+
+
+            if (keys.KeyW) {
+
+                playAnimation("walk");
+
+            } else {
+
+                playAnimation("idle");
+            }
+
+        } else {
+
+            idleTimer += delta;
+
+
+            if (
+                idleTimer >= 2 &&
+                !idle2Played &&
+                actions.idle2
+            ) {
+
+                idle2Played = true;
+
+                playAnimation("idle2");
+
+            } else if (!idle2Played) {
+
+                playAnimation("idle");
+            }
+        }
+    }
+
+
+    // =========================================================
+    // 34. TECLADO
+    // =========================================================
+
+    window.addEventListener("keydown", event => {
+
+        if (
+            [
+                "KeyW",
+                "KeyA",
+                "KeyS",
+                "KeyD"
+            ].includes(event.code)
+        ) {
+
+            event.preventDefault();
+        }
+
+
+        keys[event.code] = true;
+
+
+        // S inicia un giro de 180° una sola vez por pulsación.
+        if (
+            event.code === "KeyS" &&
+            !event.repeat &&
+            !currentAttackAnimation &&
+            !gameOver
+        ) {
+
+            targetYaw += Math.PI;
+
+            backTurnActive = true;
+
+            idleTimer = 0;
+
+            idle2Played = false;
+        }
+        // Q: giro exacto de 90 grados a la izquierda.
+if (
+    event.code === "KeyQ" &&
+    !event.repeat &&
+    !currentAttackAnimation &&
+    !gameOver
+) {
+    targetYaw += Math.PI / 2;
+    backTurnActive = true;
+}
+
+// E: giro exacto de 90 grados a la derecha.
+if (
+    event.code === "KeyE" &&
+    !event.repeat &&
+    !currentAttackAnimation &&
+    !gameOver
+) {
+    targetYaw -= Math.PI / 2;
+    backTurnActive = true;
+}
+    });
+
+
+    window.addEventListener("keyup", event => {
+
+        keys[event.code] = false;
+    });
+
+
+    window.addEventListener("blur", () => {
+
+        Object.keys(keys).forEach(key => {
+
+            keys[key] = false;
+        });
+    });
+
+
+    // =========================================================
+    // 35. ESTADO DERROTADO
+    // =========================================================
+
+    function defeatPlayer() {
+
+        if (gameOver) return;
+
+
+        gameOver = true;
+
+        currentAttackAnimation = null;
+
+        activeAttack = null;
+
+        attackWindowRemaining = 0;
+
+
+        playerBody.velocity.set(0, 0, 0);
+
+
+        Object.keys(keys).forEach(key => {
+
+            keys[key] = false;
+        });
+
+
+        if (actions.idle2) {
+
+            actions.idle2.stop();
+        }
+
+        if (actions.walk) {
+
+            actions.walk.stop();
+        }
+
+        if (actions.attack1) {
+
+            actions.attack1.stop();
+        }
+
+        if (actions.attack2) {
+
+            actions.attack2.stop();
+        }
+
+
+        playAnimation("defeated", 0.2);
+
+
+        gameOverElement.style.display = "flex";
+
+
+        setStatus("Partida finalizada.");
+    }
+
+
+    document.getElementById("restartButton")
+        .addEventListener("click", () => {
+
+            window.location.reload();
+        });
+
+
+    // =========================================================
+    // 36. SINCRONIZACIÓN DE LOS CUERPOS FÍSICOS
+    // =========================================================
+
+    function updateVisualPositions() {
+
+        // Personaje.
+        playerRoot.position.set(
+
+            playerBody.position.x,
+
+            0,
+
+            playerBody.position.z
+        );
+
+
+        // Enemigos.
+        for (const enemy of enemies) {
+
+            enemy.mesh.position.set(
+
+                enemy.body.position.x,
+
+                0,
+
+                enemy.body.position.z
+            );
+        }
+    }
+
+
+    // =========================================================
+    // 37. ACTUALIZACIÓN DE SENSORES
+    // =========================================================
+
+    function updateSensorPositions() {
+
+        attackSensor.position.set(
+
+            playerBody.position.x,
+
+            playerBody.position.y,
+
+            playerBody.position.z
+        );
+
+
+        for (const enemy of enemies) {
+
+            if (enemy.repelled) continue;
+
+
+            enemy.sensorBody.position.copy(
+                enemy.body.position
+            );
+        }
+    }
+
+
+    function resetCollisionFlags() {
+
+        for (const pickup of pickups) {
+
+            pickup.touching = false;
+        }
+
+
+        for (const enemy of enemies) {
+
+            enemy.touchingPlayer = false;
+
+            enemy.inAttackArea = false;
+        }
+    }
+
+
+    // =========================================================
+    // 38. GIRO Y SEGUIMIENTO DE CÁMARA
+    // =========================================================
+
+    function updateCamera(delta) {
+
+        // La cámara permanece detrás del personaje.
+        const cameraOffset = new THREE.Vector3(
+
+            0,
+
+            CONFIG.CAMERA_HEIGHT,
+
+            CONFIG.CAMERA_DISTANCE
+        );
+
+
+        cameraOffset.applyAxisAngle(
+
+            UP,
+
+            playerRoot.rotation.y
+        );
+
+
+        const desiredPosition =
+
+            playerRoot.position.clone().add(cameraOffset);
+
+
+        const desiredTarget =
+
+            playerRoot.position.clone().add(
+                new THREE.Vector3(0, 2.2, 0)
+            );
+
+
+        const smoothFactor =
+
+            1 - Math.exp(-5 * delta);
+
+
+        camera.position.lerp(
+
+            desiredPosition,
+
+            smoothFactor
+        );
+
+
+        const currentTarget = new THREE.Vector3();
+
+        camera.getWorldDirection(currentTarget);
+
+        const lookPoint = new THREE.Vector3();
+
+        camera.getWorldDirection(lookPoint);
+
+
+        // Seguimiento del punto de enfoque.
+        camera.lookAt(desiredTarget);
+    }
+
+
+    // =========================================================
+    // 39. PROGRESIÓN DE ENEMIGOS
+    // =========================================================
+
+    function updateEnemySpawning(delta) {
+
+        if (gameOver) return;
+
+
+        enemySpawnTimer -= delta;
+
+
+        const activeEnemyCount = enemies.filter(
+
+            enemy => !enemy.repelled
+
+        ).length;
+
+
+        const allowedEnemies = Math.min(
+
+            CONFIG.MAX_ENEMIES,
+
+            CONFIG.INITIAL_ENEMIES +
+            Math.floor(gameElapsed / 30)
+        );
+
+
+        if (
+            activeEnemyCount < allowedEnemies &&
+            enemySpawnTimer <= 0
+        ) {
+
+            spawnEnemy();
+
+
+            const interval = Math.max(
+
+                CONFIG.ENEMY_MIN_SPAWN_INTERVAL,
+
+                CONFIG.ENEMY_SPAWN_INITIAL_INTERVAL -
+                gameElapsed * 0.025
+            );
+
+
+            enemySpawnTimer = interval;
+        }
+    }
+
+
+    // =========================================================
+    // 40. REAPARICIÓN DE CURACIONES
+    // =========================================================
+
+    function updatePickupSpawning(delta) {
+
+        if (gameOver) return;
+
+
+        if (pickups.length >= CONFIG.MAX_PICKUPS) {
+
+            return;
+        }
+
+
+        pickupRespawnTimer -= delta;
+
+
+        if (pickupRespawnTimer <= 0) {
+
+            spawnPickup();
+
+            pickupRespawnTimer =
+                CONFIG.PICKUP_RESPAWN_INTERVAL;
+        }
+    }
+
+
+    // =========================================================
+    // 41. RELOJ Y HUD
+    // =========================================================
+
+    function updateHUD() {
+
+        enemyCountElement.textContent =
+
+            enemies.filter(
+                enemy => !enemy.repelled
+            ).length;
+
+
+        const minutes = Math.floor(gameElapsed / 60);
+
+        const seconds = Math.floor(gameElapsed % 60);
+
+
+        gameTimeElement.textContent =
+
+            String(minutes).padStart(2, "0") +
+            ":" +
+            String(seconds).padStart(2, "0");
+    }
+
+
+    function setStatus(message) {
+
+        statusElement.textContent = message;
+    }
+
+
+    // =========================================================
+    // 42. SINCRONIZACIÓN DE LOS LÍMITES
+    // =========================================================
+
+    function clampPlayerToMap() {
+
+        const limit = CONFIG.MAP_SIZE / 2 - 4;
+
+
+        if (playerBody.position.x > limit) {
+
+            playerBody.position.x = limit;
+
+            playerBody.velocity.x = 0;
+        }
+
+        if (playerBody.position.x < -limit) {
+
+            playerBody.position.x = -limit;
+
+            playerBody.velocity.x = 0;
+        }
+
+        if (playerBody.position.z > limit) {
+
+            playerBody.position.z = limit;
+
+            playerBody.velocity.z = 0;
+        }
+
+        if (playerBody.position.z < -limit) {
+
+            playerBody.position.z = -limit;
+
+            playerBody.velocity.z = 0;
+        }
+    }
+
+
+    // =========================================================
+    // 43. TEMPORIZADOR DE ATAQUE
+    // =========================================================
+
+    function updateAttackTimer(delta) {
+
+        if (!currentAttackAnimation) return;
+
+
+        attackTimer -= delta;
+
+
+        if (attackTimer <= 0) {
+
+            finishAttack(currentAttackAnimation);
+
+            if (!gameOver) {
+
+                updateLocomotionAnimation(0);
+            }
+        }
+    }
+
+
+    // =========================================================
+    // 44. BUCLE PRINCIPAL
+    // =========================================================
+
+    const clock = new THREE.Clock();
+
+    const FIXED_TIME_STEP = 1 / 60;
+
+    const MAX_FRAME_DELTA = 0.05;
+
+
+    function animate() {
+
+        requestAnimationFrame(animate);
+
+
+        const delta = Math.min(
+
+            clock.getDelta(),
+
+            MAX_FRAME_DELTA
+        );
+
+
+        if (!gameOver) {
+
+            gameElapsed += delta;
+
+
+            // Control del personaje.
+            updatePlayerMovement(delta);
+
+
+            // Inteligencia artificial de enemigos.
+            updateEnemyAI(delta);
+
+
+            // Posicionamiento de sensores.
+            updateSensorPositions();
+
+            // Reinicio de indicadores de colisión.
+            resetCollisionFlags();
+
+
+            // Actualización física.
+            physicsWorld.step(
+                FIXED_TIME_STEP,
+                delta,
+                3
+            );
+
+
+            clampPlayerToMap();
+
+
+            // Procesamiento de colisiones detectadas por Cannon.
+            updatePickups(delta);
+
+            updateEnemyDamage(delta);
+
+            processAttackHits();
+
+
+            // Temporizadores y eliminación.
+            if (attackWindowRemaining > 0) {
+
+                attackWindowRemaining -= delta;
+            }
+
+
+            updateAttackTimer(delta);
+
+            updateRepelledEnemies(delta);
+
+
+            // Aparición progresiva de elementos.
+            updateEnemySpawning(delta);
+
+            updatePickupSpawning(delta);
+
+
+            // Animaciones.
+            if (mixer) {
+
+                mixer.update(delta);
+            }
+
+
+            updateLocomotionAnimation(delta);
+        }
+
+
+        updateVisualPositions();
+
+        updateCamera(delta);
+
+        updateHUD();
+
+
+        // Animación visual de los objetos de curación.
+        for (const pickup of pickups) {
+
+            pickup.crystal.rotation.y += delta * 1.5;
+
+            pickup.ring.rotation.z += delta * 0.8;
+        }
+
+
+        renderer.render(scene, camera);
+    }
+
+
+    // =========================================================
+    // 45. REDIMENSIONAMIENTO DE VENTANA
+    // =========================================================
+
+    window.addEventListener("resize", () => {
+
+        camera.aspect =
+            window.innerWidth / window.innerHeight;
+
+        camera.updateProjectionMatrix();
+
+
+        renderer.setSize(
+
+            window.innerWidth,
+
+            window.innerHeight
+        );
+
+
+        renderer.setPixelRatio(
+
+            Math.min(window.devicePixelRatio, 2)
+        );
+    });
+
+
+    // =========================================================
+    // 46. INICIALIZACIÓN DEL JUEGO
+    // =========================================================
+
+    async function initializeGame() {
+
+        setStatus("Cargando recursos...");
+
+
+        // Crear las curaciones iniciales.
+        createInitialPickups();
+
+        // Cargar recursos y esperar a que la rata esté lista
+        // antes de crear los enemigos iniciales.
+        await Promise.all([
+
+            loadGroundTexture(),
+
+            loadHDR(),
+
+            loadCharacterAndAnimations(),
+
+            loadRockModel(),
+
+            loadRatEnemyModel()
+        ]);
+
+        // Ahora sí: crear enemigos con el modelo de rata ya cargado.
+        createInitialEnemies();
+
+
+        updateHealthBar();
+
+
+        loadingElement.style.display = "none";
+
+
+        setStatus(
+            "Escenario listo. Utiliza WASD para moverte."
+        );
+
+
+        console.log("Juego inicializado correctamente.");
+    }
+
+
+    // Inicia el bucle de renderizado.
+    animate();
+
+
+    // Inicia la carga de los recursos.
+    initializeGame();
+
+    </script>
+
+</body>
+</html>
